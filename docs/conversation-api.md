@@ -4,34 +4,39 @@ All rights reserved.
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Conversation API
+<a id="conversation-api"></a>
 
-Clients ask questions through the authenticated Next.js gateway:
+# API hội thoại
+
+Client đặt câu hỏi thông qua gateway Next.js có xác thực:
 
 ```text
 POST /api/chat/completions
 ```
 
-Authenticate with a session cookie or an API token (see
-[authentication.md](./authentication.md)). The request and response schemas are
-in [`openapi/auto-ontology-api.json`](./openapi/auto-ontology-api.json).
 
-## Response stream
+Xác thực bằng cookie phiên đăng nhập hoặc token API (xem
+[authentication.md](./authentication.md)). Schema của yêu cầu và phản hồi nằm trong
+[`openapi/auto-ontology-api.json`](./openapi/auto-ontology-api.json).
 
-The response is a server-sent event stream. Each event's `data:` line holds one
-JSON object, and the stream ends with `data: [DONE]`, a final line that isn't
-JSON.
+<a id="response-stream"></a>
 
-| `type`   | Carries |
-| -------- | ------- |
-| `step`   | An agent step starting or ending (`node`, `phase`, and `thought` on end), for showing progress. |
-| `sql`    | A query that passed validation and is about to run. |
-| `result` | The final `answer`: `response` (prose), `sql_code`, `sql_response_from_db` (rows), `thoughts` (step trace). |
-| `charts` | A chart or table for the result (`content`, `sql_response`). Sent after `result` when the query ran and the request includes a `conversation_id`. |
-| `error`  | A `message` describing why the run failed. |
+## Luồng phản hồi
 
-A run makes many sequential model calls and typically takes tens of seconds, so
-read the stream as it arrives:
+Phản hồi là một luồng sự kiện do máy chủ gửi (server-sent events). Dòng `data:`
+của mỗi sự kiện chứa một đối tượng JSON. Luồng kết thúc bằng `data: [DONE]`,
+một dòng cuối không phải JSON.
+
+| `type` | Nội dung |
+| --- | --- |
+| `step` | Một bước của agent bắt đầu hoặc kết thúc (`node`, `phase` và `thought` khi kết thúc), dùng để hiển thị tiến độ. |
+| `sql` | Truy vấn đã qua kiểm tra và chuẩn bị được thực thi. |
+| `result` | Kết quả `answer` cuối cùng: `response` (phần diễn giải), `sql_code`, `sql_response_from_db` (các dòng dữ liệu), `thoughts` (dấu vết các bước). |
+| `charts` | Biểu đồ hoặc bảng cho kết quả (`content`, `sql_response`). Được gửi sau `result` khi truy vấn đã chạy và yêu cầu có `conversation_id`. |
+| `error` | Một `message` mô tả lý do xử lý thất bại. |
+
+Mỗi lần xử lý thực hiện nhiều lời gọi model nối tiếp và thường mất hàng chục
+giây, vì vậy hãy đọc luồng ngay khi dữ liệu đến:
 
 ```python
 import json
@@ -65,18 +70,21 @@ for line in response.iter_lines(decode_unicode=True):
         raise RuntimeError(event["message"])
 ```
 
-The MCP server's `ask_question` tool wraps this same call and returns the
-answer, SQL, and rows as separate fields; see [mcp.md](./mcp.md).
 
-## Conversations
+Công cụ `ask_question` của máy chủ MCP bao bọc cùng lời gọi này và trả về câu trả
+lời, SQL cùng các dòng dữ liệu dưới dạng các trường riêng biệt; xem [mcp.md](./mcp.md).
 
-`conversation_id` is optional:
+<a id="conversations"></a>
 
-- Omit it for a stateless, one-shot request.
-- Send a client-generated UUID to start or continue a conversation, and reuse it
-  for every turn in the thread.
-- Wait for `[DONE]` before sending the next turn. An overlapping request on the
-  same conversation returns `409 Conversation in progress`.
+## Hội thoại
+
+`conversation_id` là tùy chọn:
+
+- Bỏ qua trường này để gửi một yêu cầu đơn lẻ, không lưu trạng thái.
+- Gửi UUID do client tạo để bắt đầu hoặc tiếp tục một hội thoại; dùng lại UUID đó
+  cho mọi lượt trong cùng cuộc hội thoại.
+- Chờ `[DONE]` trước khi gửi lượt tiếp theo. Yêu cầu chồng lấn trong cùng hội thoại
+  sẽ nhận `409 Conversation in progress`.
 
 ```json
 {
@@ -85,21 +93,25 @@ answer, SQL, and rows as separate fields; see [mcp.md](./mcp.md).
 }
 ```
 
-For a conversational turn, the backend loads up to the five most recent
-completed turns (capped at 12,000 characters) and rewrites a contextual
-follow-up such as "What about August?" into a standalone question before
-running the text-to-SQL agent. Independent questions pass through unchanged.
-Only prior questions, answers, and SQL feed that rewrite; agent thoughts, chart
-payloads, errors, and raw result rows stay out of it.
 
-Conversation history belongs to the authenticated user. An API-created
-conversation opens in the UI at `/chat?focus=<conversation_id>` for the user who
-owns it. The web UI manages its own conversation IDs.
+Với một lượt hội thoại, backend tải tối đa năm lượt đã hoàn tất gần nhất
+(giới hạn 12.000 ký tự), rồi viết lại câu hỏi tiếp nối phụ thuộc ngữ cảnh như
+“Còn tháng Tám thì sao?” thành một câu hỏi độc lập trước khi chạy agent
+chuyển văn bản thành SQL. Câu hỏi độc lập được giữ nguyên.
+Chỉ câu hỏi, câu trả lời và SQL trước đó được dùng để viết lại; phần suy luận của
+agent, payload biểu đồ, lỗi và các dòng kết quả thô không được đưa vào bước này.
 
-## Trust boundary
+Lịch sử hội thoại thuộc về người dùng đã xác thực. Hội thoại được tạo qua API
+có thể mở trong giao diện tại `/chat?focus=<conversation_id>` đối với người dùng
+sở hữu nó. Giao diện web tự quản lý ID hội thoại của mình.
 
-Call the Next.js gateway (`APP_URL`, port 3000 in Docker Compose). It resolves
-the user and forwards an internal `x-auto-ontology-user-id` header to FastAPI
-(port 3001). FastAPI trusts that header without verifying it, so keep port 3001
-on a private network. A direct FastAPI request without `conversation_id` stays
-stateless; one with `conversation_id` requires the trusted identity header.
+<a id="trust-boundary"></a>
+
+## Ranh giới tin cậy
+
+Hãy gọi gateway Next.js (`APP_URL`, cổng 3000 trong Docker Compose). Gateway
+xác định người dùng và chuyển tiếp header nội bộ `x-auto-ontology-user-id` tới
+FastAPI (cổng 3001). FastAPI tin tưởng header đó mà không xác minh, vì vậy cần
+giữ cổng 3001 trong mạng riêng. Yêu cầu gọi trực tiếp FastAPI không có
+`conversation_id` sẽ không lưu trạng thái; yêu cầu có `conversation_id` cần
+header danh tính đáng tin cậy nói trên.

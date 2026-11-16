@@ -4,68 +4,73 @@ All rights reserved.
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Connections and credential storage
+<a id="connections-and-credential-storage"></a>
 
-Auto-Ontology reads source databases from two places: connections added in the
-UI, and the `CONNECTION_STRINGS` environment variable. Use one per deployment,
-because the two code paths order them differently:
+# Kết nối và lưu trữ thông tin xác thực
 
-- **Answering questions** uses UI-managed connections when any exist, and falls
-  back to `CONNECTION_STRINGS`.
-- **Ingestion** uses `CONNECTION_STRINGS` whenever it's set, and reads
-  UI-managed connections only when it's empty.
+Auto-Ontology đọc cấu hình cơ sở dữ liệu nguồn từ hai nơi: các kết nối được thêm
+trong giao diện và biến môi trường `CONNECTION_STRINGS`. Mỗi bản triển khai nên
+chỉ dùng một cách, vì hai luồng xử lý ưu tiên chúng theo thứ tự khác nhau:
 
-## Connections added in the UI
+- **Trả lời câu hỏi** sử dụng các kết nối do giao diện quản lý khi có ít nhất một
+  kết nối; nếu không có thì dùng `CONNECTION_STRINGS`.
+- **Nạp dữ liệu (ingestion)** sử dụng `CONNECTION_STRINGS` bất cứ khi nào biến này
+  có giá trị; chỉ đọc các kết nối do giao diện quản lý khi biến này để trống.
 
-Add connections under **Settings → Connections**, or through the API
-(`POST /api/connections/test`, then `POST /api/connections`; permission
+<a id="connections-added-in-the-ui"></a>
+
+## Các kết nối được thêm trong giao diện
+
+Thêm kết nối tại **Settings → Connections** (Cài đặt → Kết nối), hoặc qua API
+(`POST /api/connections/test`, sau đó `POST /api/connections`; cần quyền
 `connection:manage`).
 
-Each connection can be scoped with a schema allowlist plus
-`table_allow_regex` / `table_deny_regex`, applied at catalog extraction. Deny
-wins, and names are unqualified and case-sensitive.
+Có thể giới hạn phạm vi từng kết nối bằng danh sách schema được phép, cùng
+`table_allow_regex` / `table_deny_regex`. Các bộ lọc này được áp dụng khi trích xuất
+catalog. Quy tắc từ chối được ưu tiên; tên bảng không kèm schema hoặc database
+và có phân biệt chữ hoa, chữ thường.
 
-Where the credentials live depends on whether Vault is configured:
+Nơi lưu thông tin xác thực phụ thuộc vào việc Vault có được cấu hình hay không:
 
-- **Without Vault.** The full connection object, password included, is
-  serialized to JSON and stored unencrypted on the catalog's database row in
-  Postgres.
-- **With Vault.** Credentials are written to Vault, keyed by database name, and
-  the catalog row stores none. The database name is the lookup key.
+- **Không dùng Vault.** Toàn bộ đối tượng kết nối, bao gồm mật khẩu, được chuyển
+  thành JSON và lưu không mã hóa trong bản ghi database của catalog trên Postgres.
+- **Có dùng Vault.** Thông tin xác thực được ghi vào Vault với khóa là tên database;
+  bản ghi catalog không lưu các thông tin này. Tên database là khóa dùng để tra cứu.
 
 ## `CONNECTION_STRINGS`
 
-A comma- or newline-separated list of connection URLs supplied at deploy time
-(`.env` for Docker Compose, `--set connectionStrings=...` for Helm). It carries
-no schema or table filters. `GET /api/connections/source` reports whether it is set.
+Danh sách URL kết nối, phân tách bằng dấu phẩy hoặc xuống dòng, được cung cấp khi
+triển khai (`.env` đối với Docker Compose, `--set connectionStrings=...` đối với Helm).
+Danh sách này không chứa bộ lọc schema hay bảng. `GET /api/connections/source`
+cho biết biến đã được đặt hay chưa.
 
-The URL scheme selects the connector:
+Scheme của URL quyết định connector được sử dụng:
 
-| Engine        | Scheme                      | Add in the UI |
-| ------------- | --------------------------- | :-----------: |
-| PostgreSQL    | `postgresql://`, `postgres://` | yes        |
-| MySQL         | `mysql://`                  | yes           |
-| Databricks    | `databricks://`             | yes           |
-| Snowflake     | `snowflake://`              | yes           |
-| ClickHouse    | `clickhouse://`             | yes           |
-| Trino         | `trino://`                  | yes           |
-| Apache Kyuubi | `kyuubi://`                 | yes           |
-| HeavyDB       | `heavydb://`                | yes           |
-| DuckDB        | `duckdb://`                 | no            |
-| SQLite        | `sqlite://`                 | no            |
+| Hệ cơ sở dữ liệu | Scheme | Thêm trong giao diện |
+| --- | --- | :---: |
+| PostgreSQL | `postgresql://`, `postgres://` | Có |
+| MySQL | `mysql://` | Có |
+| Databricks | `databricks://` | Có |
+| Snowflake | `snowflake://` | Có |
+| ClickHouse | `clickhouse://` | Có |
+| Trino | `trino://` | Có |
+| Apache Kyuubi | `kyuubi://` | Có |
+| HeavyDB | `heavydb://` | Có |
+| DuckDB | `duckdb://` | Không |
+| SQLite | `sqlite://` | Không |
 
-The registry lives in
+Danh sách đăng ký connector nằm tại
 [`auto_ontology/connectors/registry.py`](../auto_ontology/connectors/registry.py).
 
 ## Vault
 
-Vault is off by default. It turns on only when all four of these are set:
+Vault mặc định bị tắt. Tính năng này chỉ được bật khi cả bốn biến sau đều được đặt:
 
 - `VAULT_ADDR`
 - `VAULT_NAMESPACE`
 - `VAULT_ROLE_ID`
 - `VAULT_SECRET_ID`
 
-`VAULT_AUTH_MOUNT` and `VAULT_KV_MOUNT` are optional overrides. A partial
-configuration is ignored with a warning, and credentials fall back to plaintext
-storage in Postgres.
+`VAULT_AUTH_MOUNT` và `VAULT_KV_MOUNT` là các giá trị ghi đè tùy chọn. Nếu cấu hình
+chưa đầy đủ, hệ thống sẽ bỏ qua cấu hình đó và ghi cảnh báo; thông tin xác thực
+sẽ được lưu dưới dạng văn bản thuần trong Postgres.

@@ -4,17 +4,21 @@ All rights reserved.
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Auto-Ontology MCP server
+<a id="auto-ontology-mcp-server"></a>
 
-Lets any MCP-capable agent — Cursor, Claude Desktop, an internal agent — ask
-questions about your data in natural language, and inspect the semantic layer
-behind the answers. Anything that speaks [Model Context
-Protocol](https://modelcontextprotocol.io) can use it.
+# Máy chủ MCP của Auto-Ontology
 
-## How it works
+Cho phép mọi agent hỗ trợ MCP — Cursor, Claude Desktop hoặc agent nội bộ — đặt
+câu hỏi về dữ liệu bằng ngôn ngữ tự nhiên và kiểm tra lớp ngữ nghĩa dùng để đưa
+ra câu trả lời. Mọi ứng dụng hỗ trợ [Model Context
+Protocol](https://modelcontextprotocol.io) đều có thể sử dụng.
 
-The server is an HTTP client of the public Auto-Ontology API. It holds no database
-credentials, no model configuration, and no credentials of its own:
+<a id="how-it-works"></a>
+
+## Cách hoạt động
+
+Máy chủ là một HTTP client của API công khai Auto-Ontology. Nó không giữ thông
+tin xác thực database, cấu hình model hay thông tin xác thực riêng:
 
 ```
 agent harness  ──MCP──▶  auto-ontology-mcp  ──HTTPS──▶  Next.js (public API)
@@ -23,34 +27,41 @@ agent harness  ──MCP──▶  auto-ontology-mcp  ──HTTPS──▶  Next
                                         FastAPI, Postgres
 ```
 
-Authentication and permission checks already live in that Next.js layer, so the
-server inherits them rather than reimplementing them. Two things follow: it can
-run anywhere that can reach your deployment, and **a session can do exactly what
-the person behind it can do** — a viewer gets a viewer's answers.
 
-## Running it
+Việc xác thực và kiểm tra quyền đã được thực hiện ở lớp Next.js, nên máy chủ
+kế thừa cơ chế đó thay vì triển khai lại. Điều này có hai hệ quả: máy chủ có thể
+chạy ở bất cứ đâu truy cập được bản triển khai, và **mỗi phiên chỉ thực hiện được
+những gì người dùng của phiên đó được phép làm** — người có vai trò xem nhận
+các câu trả lời trong phạm vi quyền xem.
 
-Run one server; people log in through it. The URL of your Auto-Ontology deployment is the
-only thing it needs to be told:
+<a id="running-it"></a>
+
+## Chạy máy chủ
+
+Chạy một máy chủ để người dùng đăng nhập thông qua đó. Thông tin duy nhất cần
+cung cấp là URL của bản triển khai Auto-Ontology:
 
 ```sh
 AUTO_ONTOLOGY_API_URL=https://auto_ontology.example.com auto-ontology-mcp
 ```
 
-Install with `uvx`, which fetches and builds straight from the repository, so
-there is nothing to clone:
+
+Cài bằng `uvx`; công cụ này tải và dựng trực tiếp từ repository, nên không cần clone:
 
 ```sh
 uvx --from "git+https://github.com/NVIDIA/auto-ontology.git#subdirectory=mcp" auto-ontology-mcp
 ```
 
+
 > [!NOTE]
-> The MCP package installs from GitHub. `uvx auto-ontology-mcp` on its own
-> resolves only once the package is published to PyPI.
+> Gói MCP được cài từ GitHub. Lệnh `uvx auto-ontology-mcp` đứng riêng chỉ tìm được
+> gói sau khi gói đó được phát hành lên PyPI.
 
-## Connecting a client
+<a id="connecting-a-client"></a>
 
-Point the client at the URL. There are no credentials in the config:
+## Kết nối client
+
+Trỏ client tới URL. Cấu hình không chứa thông tin xác thực:
 
 ```json
 {
@@ -62,168 +73,197 @@ Point the client at the URL. There are no credentials in the config:
 }
 ```
 
-Note the `/mcp` suffix: that is the endpoint, not the server's root. Restart the
-client after editing its config, since most read MCP configuration only at
-startup.
 
-The client sees that the server wants authorization and offers to sign in —
-Cursor lists it as needing login. The user gets Auto-Ontology's ordinary login page, with
-whatever SSO that deployment uses, and the client ends up holding a token it
-manages itself. Nothing is minted or pasted by hand, and every call runs as the
-person who signed in.
+Lưu ý hậu tố `/mcp`: đây là endpoint, không phải đường dẫn gốc của máy chủ.
+Khởi động lại client sau khi chỉnh cấu hình, vì phần lớn client chỉ đọc cấu hình
+MCP khi khởi động.
 
-Then ask something like *"what does Auto-Ontology mean by an active customer, and how many
-were there last quarter?"*
+Client nhận biết máy chủ yêu cầu cấp quyền và đề nghị đăng nhập — Cursor sẽ
+hiển thị trạng thái cần đăng nhập. Người dùng được đưa tới trang đăng nhập thông
+thường của Auto-Ontology, sử dụng cấu hình SSO của bản triển khai nếu có.
+Sau đó client giữ token và tự quản lý token này. Không cần tự tạo hay dán token;
+mọi lời gọi đều chạy dưới danh tính của người đã đăng nhập.
 
-## Sign-in
+Sau đó có thể hỏi, chẳng hạn: *“Auto-Ontology định nghĩa khách hàng đang hoạt
+động như thế nào, và quý trước có bao nhiêu khách hàng như vậy?”*
 
-Auto-Ontology is the authorization server. This server holds no client id, no client
-secret, and no redirect URI, so there is nothing to configure per deployment and
-nothing to register with an identity provider — clients register themselves with
-Auto-Ontology automatically.
+<a id="sign-in"></a>
 
-Registrations and grants live in Auto-Ontology's database, so replicas share them and a
-restart signs nobody out. Permissions come from the account on every call rather
-than from the token, so changing a role, banning a user, or deleting a grant
-takes effect immediately.
+## Đăng nhập
 
-The tokens are opaque, so the server asks Auto-Ontology's OAuth UserInfo endpoint to check
-each one. That bearer-authenticated endpoint needs no client secret and checks
-expiry, revocation, client, and browser-session state on every call. The grant
-must include the `openid` scope (Better Auth's UserInfo requirement); Auto-Ontology
-advertises it on the authorization server so clients that copy
-`scopes_supported` include it. If Auto-Ontology cannot be reached the call fails as an
-error rather than as "sign in again", so an outage does not send everyone into a
-login that cannot succeed either.
+Auto-Ontology là máy chủ cấp quyền. Máy chủ MCP này không giữ client ID,
+client secret hay URI chuyển hướng, nên không có thông tin tương ứng phải cấu
+hình cho từng bản triển khai hoặc đăng ký với nhà cung cấp danh tính — client
+tự đăng ký với Auto-Ontology.
 
-There is no way to configure a token for the server itself. One would make every
-caller act as its owner — their permissions, their conversation history — and
-nothing in the protocol would reveal it.
+Thông tin đăng ký và các quyền cấp nằm trong database của Auto-Ontology, nên
+các bản sao dùng chung chúng và việc khởi động lại không làm người dùng mất
+phiên đăng nhập. Quyền được lấy từ tài khoản ở mỗi lời gọi thay vì từ token,
+nên việc đổi vai trò, cấm người dùng hoặc xóa quyền cấp có hiệu lực ngay.
 
-## Pointing at an Auto-Ontology on your own machine
+Token có dạng opaque, tức không thể suy ra nội dung danh tính trực tiếp từ token.
+Máy chủ gọi endpoint OAuth UserInfo của Auto-Ontology để kiểm tra từng token.
+Endpoint xác thực bằng bearer token này không cần client secret và kiểm tra
+thời hạn, trạng thái thu hồi, client cùng trạng thái phiên trình duyệt ở mỗi lời gọi.
+Quyền cấp phải bao gồm scope `openid` (yêu cầu của UserInfo trong Better Auth);
+Auto-Ontology công bố scope này trên máy chủ cấp quyền để các client sao chép
+`scopes_supported` đưa nó vào yêu cầu. Nếu không truy cập được Auto-Ontology,
+lời gọi trả lỗi thay vì yêu cầu “đăng nhập lại”; nhờ đó sự cố dịch vụ không đẩy
+người dùng vào một luồng đăng nhập chắc chắn thất bại.
 
-Only `AUTO_ONTOLOGY_API_URL` changes. For the Docker stack the web app is on `:3000`:
+Không có cách cấu hình token riêng cho máy chủ MCP. Nếu có, mọi người gọi sẽ
+hoạt động dưới danh tính chủ sở hữu token — dùng quyền và lịch sử hội thoại
+của người đó — mà giao thức không thể hiện điều này.
+
+<a id="pointing-at-an-auto-ontology-on-your-own-machine"></a>
+
+## Trỏ tới Auto-Ontology trên máy của bạn
+
+Chỉ cần thay đổi `AUTO_ONTOLOGY_API_URL`. Với stack Docker, ứng dụng web chạy
+ở cổng `:3000`:
 
 ```sh
 AUTO_ONTOLOGY_API_URL=http://localhost:3000 auto-ontology-mcp
 ```
 
-Sign-in needs an Auto-Ontology new enough to be an authorization server, which an
-already-built image may not be. Checking first is worth it, because otherwise the
-failure surfaces as a client that cannot log in:
+
+Đăng nhập yêu cầu một phiên bản Auto-Ontology đủ mới để đóng vai trò máy chủ
+cấp quyền; image đã dựng trước có thể chưa đáp ứng. Nên kiểm tra trước để tránh
+lỗi chỉ xuất hiện khi client không đăng nhập được:
 
 ```sh
 curl -s -o /dev/null -w '%{http_code}\n' $AUTO_ONTOLOGY_API_URL/.well-known/oauth-authorization-server
 ```
 
-A `200` is what you want. Anything else means running the frontend from your
-checkout instead — `pnpm dev`, with `AUTO_ONTOLOGY_API_URL` pointing at its port.
 
-## Tools
+Kết quả mong đợi là `200`. Nếu nhận mã khác, hãy chạy frontend từ checkout của
+bạn bằng `pnpm dev`, rồi trỏ `AUTO_ONTOLOGY_API_URL` tới cổng frontend đó.
 
-Everything here reads. Nothing modifies the glossary, the catalog, or the
-underlying databases.
+<a id="tools"></a>
 
-| Tool | What it is for |
+## Công cụ
+
+Mọi công cụ ở đây đều chỉ đọc. Không công cụ nào sửa bảng thuật ngữ, catalog
+hay các database bên dưới.
+
+| Công cụ | Mục đích |
 | --- | --- |
-| `ask_question` | **The primary tool.** Ask a question in plain language; get the answer, the SQL Auto-Ontology ran, and the rows. |
-| `check_answerable` | Grade whether the semantic layer covers a question. Cheap pre-flight before `ask_question`. |
-| `check_readiness` | Whether this deployment can answer anything at all. |
-| `search_terms` | Search the business glossary. |
-| `get_term` | One term: description, synonyms, related terms. |
-| `get_term_columns` | The physical columns a term maps to. |
-| `get_term_sql_attributes` | The SQL attributes defined under a term. |
-| `get_sql_attribute` | One SQL attribute: its expression and purpose. |
-| `describe_table` | A table's columns, related terms, and SQL attributes together. |
+| `ask_question` | **Công cụ chính.** Đặt câu hỏi bằng ngôn ngữ thông thường; nhận câu trả lời, SQL Auto-Ontology đã chạy và các dòng kết quả. |
+| `check_answerable` | Đánh giá lớp ngữ nghĩa có đủ thông tin để trả lời câu hỏi hay không. Đây là bước kiểm tra ít tốn tài nguyên trước `ask_question`. |
+| `check_readiness` | Kiểm tra bản triển khai đã đủ điều kiện để trả lời bất kỳ câu hỏi nào hay chưa. |
+| `search_terms` | Tìm kiếm trong bảng thuật ngữ nghiệp vụ. |
+| `get_term` | Lấy một thuật ngữ: mô tả, từ đồng nghĩa và các thuật ngữ liên quan. |
+| `get_term_columns` | Lấy các cột vật lý được ánh xạ tới thuật ngữ. |
+| `get_term_sql_attributes` | Lấy các thuộc tính SQL được định nghĩa trong một thuật ngữ. |
+| `get_sql_attribute` | Lấy một thuộc tính SQL: biểu thức và mục đích sử dụng. |
+| `describe_table` | Lấy các cột, thuật ngữ liên quan và thuộc tính SQL của một bảng trong cùng kết quả. |
 
-There is deliberately no tool for browsing databases, schemas, or raw columns.
-Consumers are meant to reach the data through the semantic layer, and a catalog
-browser invites an agent to reason about raw tables instead. `describe_table`
-covers the legitimate case, since what it returns is the terms and SQL attributes
-a table participates in.
+Hệ thống chủ động không cung cấp công cụ duyệt database, schema hoặc các cột
+thô. Bên sử dụng cần tiếp cận dữ liệu thông qua lớp ngữ nghĩa; công cụ duyệt
+catalog có thể khiến agent suy luận trực tiếp từ bảng thô. `describe_table`
+đáp ứng nhu cầu hợp lệ vì trả về các thuật ngữ và thuộc tính SQL có liên quan
+đến bảng đó.
 
-The server also advertises **instructions** at handshake describing how the tools
-sequence, which spares the model from inferring it — left to itself it tends to
-reach straight for `ask_question`.
+Máy chủ cũng công bố **hướng dẫn** trong quá trình bắt tay, mô tả thứ tự dùng
+các công cụ để model không phải tự suy ra — nếu không được hướng dẫn, model
+thường gọi thẳng `ask_question`.
 
-### About `ask_question`
+<a id="about-ask_question"></a>
 
-It is a call to `POST /api/chat/completions`, the same endpoint the web UI uses,
-which runs the full text-to-SQL agent: many sequential model calls, typically
-tens of seconds. It returns the answer, the SQL, and the rows as separate fields
-rather than the markdown the UI receives, so an agent can use the SQL without
-parsing prose. Results are capped at 100 rows, with `row_count` and `truncated`
-reporting what was withheld. It emits MCP progress notifications as the agent
-works, mirroring the reasoning trace the web UI shows.
+### Về `ask_question`
 
-### About `check_readiness`
+Công cụ này gọi `POST /api/chat/completions`, cùng endpoint mà giao diện web
+sử dụng, để chạy toàn bộ agent chuyển văn bản thành SQL: nhiều lời gọi model
+nối tiếp, thường mất hàng chục giây. Kết quả gồm câu trả lời, SQL và các dòng
+dữ liệu dưới dạng các trường riêng biệt, thay vì Markdown như giao diện nhận
+được, nên agent có thể dùng SQL mà không cần phân tích phần diễn giải.
+Kết quả bị giới hạn ở 100 dòng; `row_count` và `truncated` cho biết số lượng
+và việc kết quả có bị cắt bớt hay không. Công cụ gửi thông báo tiến độ MCP
+trong khi agent xử lý, tương ứng với dấu vết suy luận hiển thị trên giao diện web.
 
-Answering a question needs two independent things: a compiled semantic layer to
-resolve the question against, and a live database connection to run the SQL on.
-Having one without the other is this deployment's most misleading state, because
-everything looks healthy — the glossary reads, terms resolve — and every question
-still fails, expensively and vaguely, after minutes of model calls.
-`check_readiness` tells that apart up front, and reports every blocker at once.
+<a id="about-check_readiness"></a>
 
-Note that `databases` can be non-empty while `can_execute_sql` is false: the
-catalog outlives the connection it was ingested from, so a named database is not
-evidence that anything can be queried. Reading connections is also admin-only by
-default, so a viewer gets a 403 there while chat and the catalog read fine — that
-is neither a broken deployment nor a bad credential, so the fact is reported
-under `unverified` and the verdict stands on what could be checked.
+### Về `check_readiness`
 
-## Configuration
+Để trả lời câu hỏi cần hai điều kiện độc lập: lớp ngữ nghĩa đã được biên dịch
+để diễn giải câu hỏi, và kết nối database còn hoạt động để chạy SQL.
+Chỉ có một trong hai là trạng thái dễ gây hiểu nhầm nhất: mọi thứ có vẻ bình
+thường — đọc được bảng thuật ngữ, xác định được thuật ngữ — nhưng câu hỏi vẫn
+thất bại sau nhiều phút gọi model, vừa tốn tài nguyên vừa khó nhận biết nguyên
+nhân. `check_readiness` phân biệt các tình huống này từ đầu và báo đồng thời
+mọi điều kiện đang cản trở.
 
-| Variable | Default | Meaning |
+Lưu ý rằng `databases` có thể không rỗng trong khi `can_execute_sql` là false:
+catalog vẫn tồn tại sau khi kết nối dùng để nạp nó không còn hoạt động, nên có
+tên database chưa chứng minh được khả năng truy vấn. Mặc định, chỉ quản trị
+viên được đọc cấu hình kết nối, vì vậy người có vai trò xem nhận mã 403 ở bước
+đó dù chat và catalog vẫn đọc bình thường — điều này không có nghĩa bản triển
+khai bị lỗi hay thông tin xác thực sai. Trường hợp này được ghi dưới
+`unverified`, và kết luận dựa trên những gì thực sự kiểm tra được.
+
+<a id="configuration"></a>
+
+## Cấu hình
+
+| Biến | Mặc định | Ý nghĩa |
 | --- | --- | --- |
-| `AUTO_ONTOLOGY_API_URL` | `http://localhost:3000` | Base URL of the Auto-Ontology web app. |
-| `AUTO_ONTOLOGY_MCP_PUBLIC_URL` | `http://localhost:3003` | Public MCP origin, without `/mcp`. The frontend must receive the same value so issued tokens have the resource URL clients use. |
+| `AUTO_ONTOLOGY_API_URL` | `http://localhost:3000` | URL gốc của ứng dụng web Auto-Ontology. |
+| `AUTO_ONTOLOGY_MCP_PUBLIC_URL` | `http://localhost:3003` | Địa chỉ gốc MCP công khai, không có `/mcp`. Frontend phải nhận cùng giá trị để token được cấp chứa đúng URL tài nguyên mà client sử dụng. |
 
-Rarely needed: `AUTO_ONTOLOGY_MCP_HOST` and `AUTO_ONTOLOGY_MCP_PORT` (bind address and port, default
-`0.0.0.0:3003`), `AUTO_ONTOLOGY_MCP_TIMEOUT_S` and `AUTO_ONTOLOGY_MCP_CHAT_TIMEOUT_S` (request
-timeouts, `30` and `900`), and `AUTO_ONTOLOGY_OPENAPI_SPEC` (override the spec tools are
-generated from).
+Các biến ít khi cần dùng: `AUTO_ONTOLOGY_MCP_HOST` và `AUTO_ONTOLOGY_MCP_PORT`
+(địa chỉ và cổng lắng nghe, mặc định `0.0.0.0:3003`),
+`AUTO_ONTOLOGY_MCP_TIMEOUT_S` và `AUTO_ONTOLOGY_MCP_CHAT_TIMEOUT_S`
+(thời gian chờ yêu cầu, lần lượt `30` và `900`), cùng
+`AUTO_ONTOLOGY_OPENAPI_SPEC` (ghi đè đặc tả dùng để sinh các công cụ).
 
-## Extending the tool surface
+<a id="extending-the-tool-surface"></a>
 
-The tool set is an explicit allow-list in
-[`mcp/auto_ontology_mcp/tools.py`](../mcp/auto_ontology_mcp/tools.py). The spec publishes 87
-operations, and exposing all of them would degrade tool selection badly. To
-publish another, add a `ToolSpec` naming its method, path, an agent-facing name,
-and a description that says *when to reach for it*. Startup fails loudly if a
-curated entry no longer exists in the spec, so a rename upstream cannot silently
-drop a tool.
+## Mở rộng tập công cụ
 
-Parameters and descriptions come from
-[`auto-ontology-api.json`](./openapi/auto-ontology-api.json), which is committed twice: canonically
-under `docs/openapi/`, and again inside the package, because the server reads it
-at startup and must work from an install where no `docs/` directory exists.
-`pnpm openapi` writes both and CI diffs both, so never edit the packaged copy by
-hand.
+Tập công cụ là một danh sách cho phép được khai báo rõ ràng trong
+[`mcp/auto_ontology_mcp/tools.py`](../mcp/auto_ontology_mcp/tools.py).
+Đặc tả công bố 87 thao tác; đưa tất cả ra ngoài sẽ làm giảm đáng kể khả năng
+chọn đúng công cụ. Để công bố thêm một thao tác, thêm `ToolSpec` xác định
+phương thức, đường dẫn, tên công cụ cho agent và mô tả **khi nào nên sử dụng**.
+Máy chủ sẽ báo lỗi và không khởi động nếu một mục trong danh sách được chọn
+không còn tồn tại trong đặc tả, tránh việc đổi tên ở upstream âm thầm làm mất
+công cụ.
 
-## Troubleshooting
+Các tham số và mô tả lấy từ
+[`auto-ontology-api.json`](./openapi/auto-ontology-api.json), được lưu trong Git ở
+hai nơi: bản chuẩn trong `docs/openapi/` và một bản trong gói, vì máy chủ đọc
+đặc tả lúc khởi động và phải hoạt động cả khi bản cài đặt không có thư mục
+`docs/`. `pnpm openapi` ghi cả hai bản và CI đối chiếu chúng, vì vậy không chỉnh
+tay bản nằm trong gói.
 
-**A client cannot discover how to sign in** — check that
-`$AUTO_ONTOLOGY_API_URL/.well-known/oauth-authorization-server` returns JSON. A redirect to
-the login page instead means the deployment predates that route.
+<a id="troubleshooting"></a>
 
-**"Protected resource ... does not match expected ..."** — the server advertises
-the address it was bound to, and the client is reaching it under a different
-spelling of the same host, almost always `127.0.0.1` against `localhost`. Set
-`AUTO_ONTOLOGY_MCP_PUBLIC_URL` to the URL the client uses, or leave `AUTO_ONTOLOGY_MCP_HOST` unset.
+## Khắc phục sự cố
 
-**"This request carried no signed-in session"** — the grant behind the call
-expired or was revoked in Auto-Ontology. Sign in again from the client.
+**Client không tìm được cách đăng nhập** — kiểm tra
+`$AUTO_ONTOLOGY_API_URL/.well-known/oauth-authorization-server` có trả về JSON
+hay không. Nếu bị chuyển hướng tới trang đăng nhập, bản triển khai có trước
+khi route đó được bổ sung.
 
-**`ask_question` returned an empty answer, with no SQL and no error** — the run
-completed but retrieval found nothing to build a query from. Call
-`check_readiness` first: most often no database connection is configured, so no
-question can succeed however it is phrased. If the deployment is ready, the
-question's vocabulary is the problem — `search_terms` for the nouns in it.
+**Lỗi “Protected resource ... does not match expected ...”** — máy chủ công bố
+địa chỉ mà nó lắng nghe, nhưng client truy cập bằng một cách viết khác của cùng
+host; hầu hết trường hợp là `127.0.0.1` và `localhost`. Đặt
+`AUTO_ONTOLOGY_MCP_PUBLIC_URL` thành URL client sử dụng, hoặc bỏ giá trị của
+`AUTO_ONTOLOGY_MCP_HOST`.
 
-**"Auto-Ontology cannot answer right now"** — usually the semantic layer was never
-compiled; confirm with `check_readiness`. It also appears when a
-`conversation_id` already has a turn in flight.
+**Lỗi “This request carried no signed-in session”** — quyền cấp đứng sau lời gọi
+đã hết hạn hoặc bị thu hồi trong Auto-Ontology. Hãy đăng nhập lại từ client.
 
-**Client shows no tools** — check the client's MCP logs. The server logs to
-stderr.
+**`ask_question` trả về câu trả lời rỗng, không có SQL và không báo lỗi** — lần
+xử lý đã hoàn tất nhưng bước truy xuất không tìm được dữ liệu để dựng truy vấn.
+Hãy gọi `check_readiness` trước: nguyên nhân thường là chưa cấu hình kết nối
+database, nên diễn đạt câu hỏi thế nào cũng không thể trả lời được. Nếu bản
+triển khai đã sẵn sàng, vấn đề nằm ở từ ngữ trong câu hỏi — dùng `search_terms`
+để tra các danh từ trong đó.
+
+**Thông báo “Auto-Ontology cannot answer right now”** — thường do lớp ngữ nghĩa
+chưa từng được biên dịch; xác nhận bằng `check_readiness`. Thông báo này cũng
+xuất hiện khi một `conversation_id` đã có lượt đang được xử lý.
+
+**Client không hiển thị công cụ** — kiểm tra log MCP của client. Máy chủ ghi
+log ra stderr.
